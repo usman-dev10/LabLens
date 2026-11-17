@@ -1,13 +1,16 @@
 import json
 import os
 from dataclasses import dataclass
+from pathlib import Path
 from typing import TypeVar
 
 import httpx
 from dotenv import load_dotenv
 from pydantic import BaseModel, ValidationError
 
-load_dotenv()
+# Always load the backend-specific file, even when Uvicorn is started from the
+# repository root instead of the backend directory.
+load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 
 T = TypeVar("T", bound=BaseModel)
 MODEL_TIMEOUT_SECONDS = 45.0
@@ -28,10 +31,10 @@ class Provider:
 def _providers() -> list[Provider]:
     candidates = [
         Provider(
-            name="primary",
-            api_key=os.getenv("XAI_API_KEY", "").strip(),
-            base_url=os.getenv("XAI_BASE_URL", "https://api.x.ai/v1").rstrip("/"),
-            model=os.getenv("XAI_MODEL", "grok-3-mini").strip(),
+            name="Groq",
+            api_key=os.getenv("GROQ_API_KEY", "").strip(),
+            base_url=os.getenv("GROQ_BASE_URL", "https://api.groq.com/openai/v1").rstrip("/"),
+            model=os.getenv("GROQ_MODEL", "openai/gpt-oss-20b").strip(),
         ),
         Provider(
             name="fallback",
@@ -98,7 +101,7 @@ async def call_json(
     providers = _providers()
     if not providers:
         raise ModelCallError(
-            "No model provider is configured. Set XAI_API_KEY and XAI_MODEL, "
+            "No model provider is configured. Set GROQ_API_KEY and GROQ_MODEL, "
             "or configure all FALLBACK_* values."
         )
 

@@ -14,5 +14,6 @@ npm run dev
 The API defaults to `http://localhost:8000`. Set `NEXT_PUBLIC_API_URL` in `.env.local`
 if the FastAPI service uses a different address.
 
-The report is sent to the configured model provider for analysis. LabLens does not save
-reports or create an account. Do not use real or sensitive reports in demos.
+Users sign in before analysis. Completed explanations are stored by the backend in the signed-in
+user's private history. The report is also sent to the configured model provider for analysis.
+Do not use real or sensitive reports in demos.

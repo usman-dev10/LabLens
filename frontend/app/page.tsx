@@ -15,6 +15,12 @@ type AgentName = "intake" | "analyzer" | "improvement" | "nutrition" | "safety" 
 type AgentStatus = "waiting" | "running" | "done";
 type AgentProgress = { name: AgentName; status: AgentStatus; preview?: string };
 type Language = "en" | "roman";
+type FeatureId = "clarity" | "language" | "safety";
+type CurrentUser = { id: number; name: string; email: string };
+type AuthSession = { token: string; user: CurrentUser };
+type SavedReport = { id: string; created_at: string; patient_name: string | null; summary: string };
+
+const sessionStorageKey = "lablens-session";
 
 const agentNames: AgentName[] = [
   "intake",
@@ -26,12 +32,12 @@ const agentNames: AgentName[] = [
 ];
 
 const agentLabels: Record<AgentName, string> = {
-  intake: "Reading your report",
-  analyzer: "Reviewing each result",
-  improvement: "Preparing helpful guidance",
-  nutrition: "Reviewing everyday habits",
-  safety: "Running a safety review",
-  summary: "Writing your summary",
+  intake: "Agent 1 — Reading your report",
+  analyzer: "Agent 2 — Reviewing each result",
+  improvement: "Agent 3 — Preparing helpful guidance",
+  nutrition: "Agent 4 — Reviewing everyday habits",
+  safety: "Agent 5 — Running a safety review",
+  summary: "Agent 6 — Writing your summary",
 };
 
 const resultCopy = {
@@ -104,6 +110,136 @@ function resultSafetyNoteRoman(_note: string): string {
 
 const apiBase = (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000").replace(/\/$/, "");
 
+function PublicLanding({ onAuthenticated }: { onAuthenticated: (session: AuthSession) => void }) {
+  const [showAccount, setShowAccount] = useState(false);
+  const [isLogin, setIsLogin] = useState(false);
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  async function submitAccount(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError("");
+    setSubmitting(true);
+    try {
+      const response = await fetch(`${apiBase}/api/auth/${isLogin ? "login" : "register"}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(isLogin ? { email, password } : { name, email, password }),
+      });
+      const payload = (await response.json()) as AuthSession & { detail?: string };
+      if (!response.ok || !payload.token || !payload.user) {
+        throw new Error(payload.detail || "We could not create your account.");
+      }
+      onAuthenticated({ token: payload.token, user: payload.user });
+    } catch (submitError) {
+      setError(errorText(submitError));
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <main>
+      <header className="topbar">
+        <a className="brand" href="#top" aria-label="LabLens home">
+          <span className="brand-mark" aria-hidden="true"><span /><span /><span /></span>
+          <span>Lab<span className="brand-light">Lens</span></span>
+        </a>
+        <nav className="topnav" aria-label="Main navigation">
+          <a href="#features">Features</a>
+          <a href="#privacy">Your privacy</a>
+          <button type="button" className="nav-cta" onClick={() => setShowAccount(true)}>Create account <span aria-hidden="true">↗</span></button>
+        </nav>
+      </header>
+      <div className="notice-strip" role="note"><span className="notice-dot" aria-hidden="true" />An educational guide — never a diagnosis. Always discuss results with your doctor.</div>
+      <section className="hero" id="top">
+        <div className="hero-copy">
+          <div className="eyebrow"><span className="eyebrow-line" /> A clearer view of your health</div>
+          <h1>Lab results,<br /><em>made human.</em></h1>
+          <p className="hero-description">Understand your report in clear language, then keep your explanations safely in your private account.</p>
+          <button type="button" className="primary-button hero-button" onClick={() => setShowAccount(true)}>Create your free account <span aria-hidden="true">↓</span></button>
+          <p className="landing-login">Already have an account? <button type="button" onClick={() => { setIsLogin(true); setShowAccount(true); }}>Sign in</button></p>
+        </div>
+        <div className="hero-art" aria-label="Illustration of a lab result card" role="img">
+          <div className="report-card">
+            <div className="report-card-head"><span className="report-icon">✚</span><span><strong>YOUR RESULTS</strong><small>One step closer to clarity</small></span><span className="report-menu">···</span></div>
+            <div className="report-divider" />
+            <div className="sample-result"><div><strong>Vitamin D</strong><small>25-hydroxy · ng/mL</small></div><b>32</b></div>
+            <div className="range-track"><span className="range-marker" /></div>
+            <div className="range-labels"><span>Low</span><span className="range-ok">In range</span><span>High</span></div>
+            <div className="gentle-note"><span>✦</span> Your explanation is saved to your account.</div>
+          </div>
+          <div className="floating-note"><span className="floating-check">✓</span> Private history, always</div>
+        </div>
+      </section>
+      <section className="stats-row" id="features" aria-label="LabLens principles">
+        <div className="stat-item"><span className="stat-icon">◉</span><div><strong>Plain-language reports</strong><small>Clear words, less overwhelm</small></div></div>
+        <div className="stat-item"><span className="stat-icon stat-leaf">✳</span><div><strong>Six working AI agents</strong><small>Every step is shown live</small></div></div>
+        <div className="stat-item" id="privacy"><span className="stat-icon stat-lock">⌑</span><div><strong>Private saved history</strong><small>Only visible in your account</small></div></div>
+      </section>
+      {showAccount && (
+        <div className="auth-overlay" role="dialog" aria-modal="true" aria-labelledby="account-title">
+          <form className="auth-card" onSubmit={submitAccount}>
+            <button className="auth-close" type="button" aria-label="Close" onClick={() => setShowAccount(false)}>×</button>
+            <span className="auth-kicker">LABLENS ACCOUNT</span>
+            <h2 id="account-title">{isLogin ? "Welcome back." : "Save your health story."}</h2>
+            <p>{isLogin ? "Sign in to see your saved reports." : "Create an account to analyse and save reports privately."}</p>
+            {!isLogin && <label>Full name<input required minLength={2} value={name} onChange={(event) => setName(event.target.value)} autoComplete="name" /></label>}
+            <label>Email<input required type="email" value={email} onChange={(event) => setEmail(event.target.value)} autoComplete="email" /></label>
+            <label>Password<input required type="password" minLength={8} value={password} onChange={(event) => setPassword(event.target.value)} autoComplete={isLogin ? "current-password" : "new-password"} /></label>
+            {error && <p className="auth-error">{error}</p>}
+            <button className="primary-button auth-submit" disabled={submitting} type="submit">{submitting ? "Please wait…" : isLogin ? "Sign in" : "Create account"}</button>
+            <button className="auth-switch" type="button" onClick={() => { setIsLogin((current) => !current); setError(""); }}>{isLogin ? "New to LabLens? Create an account" : "Already have an account? Sign in"}</button>
+          </form>
+        </div>
+      )}
+    </main>
+  );
+}
+
+const featureOrder: FeatureId[] = ["clarity", "language", "safety"];
+
+const landingFeatures: Record<FeatureId, {
+  number: string;
+  label: string;
+  title: string;
+  description: string;
+  metric: string;
+  metricLabel: string;
+  note: string;
+}> = {
+  clarity: {
+    number: "01",
+    label: "Clear context",
+    title: "See the number, the range, and the next question together.",
+    description: "LabLens keeps the original result visible, then adds plain-language context without pretending to diagnose you.",
+    metric: "106",
+    metricLabel: "Glucose · mg/dL",
+    note: "A little above the listed range",
+  },
+  language: {
+    number: "02",
+    label: "Language that meets you",
+    title: "Switch between English and Roman Urdu in one tap.",
+    description: "The same careful explanation is available in familiar language, so it is easier to understand and share at home.",
+    metric: "Aasaan alfaaz",
+    metricLabel: "Roman Urdu explanation",
+    note: "Apne doctor se is result ke context ke baare mein poochain.",
+  },
+  safety: {
+    number: "03",
+    label: "Safety built in",
+    title: "Guidance is reviewed before it reaches you.",
+    description: "The app is designed to avoid diagnosis, prescriptions, and overconfident claims, while making urgent follow-up clear.",
+    metric: "Safety review",
+    metricLabel: "Before your summary",
+    note: "For learning and discussion, never a treatment plan.",
+  },
+};
+
 function initialProgress(): AgentProgress[] {
   return agentNames.map((name) => ({ name, status: "waiting" }));
 }
@@ -158,7 +294,12 @@ export default function Home() {
   const [patientAge, setPatientAge] = useState("");
   const [patientGender, setPatientGender] = useState("");
   const [speechPaused, setSpeechPaused] = useState(false);
+  const [activeFeature, setActiveFeature] = useState<FeatureId>("clarity");
+  const [user, setUser] = useState<CurrentUser | null>(null);
+  const [authReady, setAuthReady] = useState(false);
+  const [savedReports, setSavedReports] = useState<SavedReport[]>([]);
   const printableRef = useRef<HTMLElement>(null);
+  const resultsInputRef = useRef<HTMLTextAreaElement>(null);
   const abortRef = useRef<AbortController | null>(null);
 
   useEffect(
@@ -169,6 +310,88 @@ export default function Home() {
     [],
   );
 
+  useEffect(() => {
+    const stored = window.localStorage.getItem(sessionStorageKey);
+    if (!stored) {
+      setAuthReady(true);
+      return;
+    }
+    let session: AuthSession;
+    try {
+      session = JSON.parse(stored) as AuthSession;
+    } catch {
+      window.localStorage.removeItem(sessionStorageKey);
+      setAuthReady(true);
+      return;
+    }
+    void fetch(`${apiBase}/api/auth/me`, { headers: { Authorization: `Bearer ${session.token}` } })
+      .then(async (response) => {
+        if (!response.ok) throw new Error("Session expired");
+        const payload = (await response.json()) as { user: CurrentUser };
+        setUser(payload.user);
+        void refreshReports();
+      })
+      .catch(() => window.localStorage.removeItem(sessionStorageKey))
+      .finally(() => setAuthReady(true));
+  }, []);
+
+  function token() {
+    const stored = window.localStorage.getItem(sessionStorageKey);
+    if (!stored) return null;
+    try {
+      return (JSON.parse(stored) as AuthSession).token;
+    } catch {
+      return null;
+    }
+  }
+
+  async function refreshReports() {
+    const sessionToken = token();
+    if (!sessionToken) return;
+    const response = await fetch(`${apiBase}/api/reports`, {
+      headers: { Authorization: `Bearer ${sessionToken}` },
+    });
+    if (!response.ok) return;
+    const payload = (await response.json()) as { reports: SavedReport[] };
+    setSavedReports(payload.reports);
+  }
+
+  function completeAuthentication(session: AuthSession) {
+    window.localStorage.setItem(sessionStorageKey, JSON.stringify(session));
+    setUser(session.user);
+    setAuthReady(true);
+    void refreshReports();
+  }
+
+  async function signOut() {
+    const sessionToken = token();
+    if (sessionToken) {
+      await fetch(`${apiBase}/api/auth/logout`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${sessionToken}` },
+      });
+    }
+    window.localStorage.removeItem(sessionStorageKey);
+    setUser(null);
+    setSavedReports([]);
+    setResult(null);
+  }
+
+  async function openSavedReport(reportId: string) {
+    const sessionToken = token();
+    if (!sessionToken) return;
+    const response = await fetch(`${apiBase}/api/reports/${reportId}`, {
+      headers: { Authorization: `Bearer ${sessionToken}` },
+    });
+    if (!response.ok) {
+      setNotice("This saved report could not be opened.");
+      return;
+    }
+    const payload = (await response.json()) as { result: FinalResult };
+    setResult(payload.result);
+    window.requestAnimationFrame(() => document.getElementById("results")?.scrollIntoView({ behavior: "smooth" }));
+  }
+
   function chooseSample(sampleId: string) {
     const selected = samples.find((item) => item.id === sampleId);
     if (!selected) return;
@@ -177,6 +400,14 @@ export default function Home() {
     setMode("text");
     setNotice("");
     setResult(null);
+  }
+
+  function startDemo() {
+    chooseSample("full");
+    window.requestAnimationFrame(() => {
+      document.getElementById("analyze")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      resultsInputRef.current?.focus({ preventScroll: true });
+    });
   }
 
   function updateFile(event: ChangeEvent<HTMLInputElement>) {
@@ -206,6 +437,11 @@ export default function Home() {
   async function submitAnalysis(event?: FormEvent<HTMLFormElement>) {
     event?.preventDefault();
     if (processing) return;
+    const sessionToken = token();
+    if (!sessionToken) {
+      setNotice("Please create an account or sign in before analysing a report.");
+      return;
+    }
     if (mode === "upload" && !file) {
       setNotice("Choose a report file first.");
       return;
@@ -235,6 +471,7 @@ export default function Home() {
         method: "POST",
         body,
         signal: controller.signal,
+        headers: { Authorization: `Bearer ${sessionToken}` },
       });
       if (!response.ok) {
         throw new Error(readError(await response.text()));
@@ -286,6 +523,7 @@ export default function Home() {
             );
             setPatientGender(message.result.patient.gender || "");
             receivedFinal = true;
+            void refreshReports();
           }
         }
         if (done) break;
@@ -383,6 +621,14 @@ export default function Home() {
   );
   const copy = resultCopy[language];
 
+  if (!authReady) {
+    return <main className="loading-page">Loading LabLens…</main>;
+  }
+
+  if (!user) {
+    return <PublicLanding onAuthenticated={completeAuthentication} />;
+  }
+
   return (
     <main>
       <header className="topbar">
@@ -395,7 +641,9 @@ export default function Home() {
           <span>Lab<span className="brand-light">Lens</span></span>
         </a>
         <nav className="topnav" aria-label="Main navigation">
+          <a href="#features">Features</a>
           <a href="#how-it-works">How it works</a>
+          <button type="button" className="account-pill" onClick={signOut}>Hi, {user.name.split(" ")[0]} · Sign out</button>
           <a href="#privacy">Your privacy</a>
           <a className="nav-cta" href="#analyze">Understand a report <span aria-hidden="true">↗</span></a>
         </nav>
@@ -417,16 +665,15 @@ export default function Home() {
           <a href="#analyze" className="primary-button hero-button">
             Make sense of my results <span aria-hidden="true">↓</span>
           </a>
+          <button type="button" className="hero-demo-button" onClick={startDemo}>
+            Load a full synthetic demo <span aria-hidden="true">→</span>
+          </button>
           <div className="hero-trust">
             <span className="trust-icon" aria-hidden="true">✳</span>
-            No account. No saved reports. Just a little more understanding.
+            Your account keeps your saved explanations private and ready when you need them.
           </div>
         </div>
         <div className="hero-art" aria-label="Illustration of a lab result card" role="img">
-          <div className="orbit orbit-one" />
-          <div className="orbit orbit-two" />
-          <div className="spark spark-one">✳</div>
-          <div className="spark spark-two">✦</div>
           <div className="report-card">
             <div className="report-card-head">
               <span className="report-icon">✚</span>
@@ -452,12 +699,88 @@ export default function Home() {
         <div className="stat-item"><span className="stat-icon stat-lock">⌑</span><div><strong>Your report stays yours</strong><small>Not stored after your session</small></div></div>
       </section>
 
+      <section className="feature-section" id="features" aria-labelledby="features-heading">
+        <div className="feature-heading">
+          <div>
+            <div className="eyebrow"><span className="eyebrow-line" /> Built for the in-between moments</div>
+            <h2 id="features-heading">Less guessing.<br /><em>More grounding.</em></h2>
+          </div>
+          <p>Explore what changes when a lab report is explained with a little more care.</p>
+        </div>
+
+        <div className="feature-stage">
+          <div className="feature-tabs" role="tablist" aria-label="LabLens features">
+            {featureOrder.map((featureId) => {
+              const feature = landingFeatures[featureId];
+              const selected = activeFeature === featureId;
+              return (
+                <button
+                  type="button"
+                  className={selected ? "feature-tab active" : "feature-tab"}
+                  id={`feature-tab-${featureId}`}
+                  key={featureId}
+                  role="tab"
+                  aria-selected={selected}
+                  aria-controls="feature-preview"
+                  onClick={() => setActiveFeature(featureId)}
+                >
+                  <span className="feature-number">{feature.number}</span>
+                  <span><strong>{feature.label}</strong><small>{feature.title}</small></span>
+                  <span className="feature-arrow" aria-hidden="true">→</span>
+                </button>
+              );
+            })}
+          </div>
+
+          <div
+            className={`feature-preview feature-preview-${activeFeature}`}
+            id="feature-preview"
+            role="tabpanel"
+            aria-labelledby={`feature-tab-${activeFeature}`}
+          >
+            <div className="preview-glow" aria-hidden="true" />
+            <div className="preview-card">
+              <div className="preview-card-top"><span>LABLENS PREVIEW</span><i /><i /><i /></div>
+              <div className="preview-card-copy">
+                <span className="preview-label">{landingFeatures[activeFeature].metricLabel}</span>
+                <strong>{landingFeatures[activeFeature].metric}</strong>
+              </div>
+              <div className="preview-status"><span /><p>{landingFeatures[activeFeature].note}</p></div>
+              <div className="preview-lines" aria-hidden="true"><span /><span /><span /></div>
+            </div>
+            <div className="preview-caption">
+              <span>{landingFeatures[activeFeature].number}</span>
+              <div><strong>{landingFeatures[activeFeature].label}</strong><p>{landingFeatures[activeFeature].description}</p></div>
+            </div>
+          </div>
+        </div>
+
+        <div className="feature-footnote">
+          <span className="feature-pulse" aria-hidden="true" />
+          Each completed report is securely saved to your private account history.
+          <button type="button" onClick={startDemo}>See it with a synthetic report <span aria-hidden="true">→</span></button>
+        </div>
+      </section>
+
       <section id="analyze" className="workspace-section">
         <div className="section-heading">
           <div className="eyebrow"><span className="eyebrow-line" /> Your next step</div>
           <h2>Let’s look at your results.</h2>
           <p>Upload a report or type in a few values. We’ll take it one step at a time.</p>
         </div>
+
+        <section className="saved-reports" aria-labelledby="saved-reports-heading">
+          <div><span className="saved-label">PRIVATE HISTORY</span><h3 id="saved-reports-heading">Your saved reports</h3></div>
+          {savedReports.length ? (
+            <div className="saved-report-list">
+              {savedReports.slice(0, 4).map((report) => (
+                <button type="button" key={report.id} onClick={() => void openSavedReport(report.id)}>
+                  <span><strong>{report.patient_name || "Lab report"}</strong><small>{new Date(report.created_at).toLocaleDateString()} · {report.summary}</small></span><b aria-hidden="true">→</b>
+                </button>
+              ))}
+            </div>
+          ) : <p className="empty-history">Your completed report explanations will appear here.</p>}
+        </section>
 
         <div className="workspace-grid">
           <div className="input-card">
@@ -476,6 +799,7 @@ export default function Home() {
                   Lab results
                   <textarea
                     id="results-text"
+                    ref={resultsInputRef}
                     rows={7}
                     value={text}
                     onChange={(event) => {
@@ -548,7 +872,7 @@ export default function Home() {
         )}
 
         {result && selectedSummary && (
-          <section className="results-section" aria-labelledby="results-heading">
+          <section className="results-section" id="results" aria-labelledby="results-heading">
             <div className="results-heading">
               <div><div className="eyebrow"><span className="eyebrow-line" /> Your explanation</div><h2 id="results-heading">{copy.resultTitle}</h2></div>
               <div className="result-actions">

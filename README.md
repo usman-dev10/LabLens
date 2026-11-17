@@ -9,15 +9,16 @@ The repository is split into two independently runnable modules:
 - `frontend/` — Next.js App Router, TypeScript, Tailwind CSS.
 - `backend/` — FastAPI, Pydantic contracts, a streamed six-agent model pipeline.
 
-No user account, database, report history, or permanent report storage is used. Report contents
-are sent to the model provider configured by the operator; review its data-handling terms before
-use. Use synthetic data for demos.
+Users create a password-protected account before analysing reports. Completed explanations are
+saved to the local SQLite database (`backend/lablens.db`) and shown only to the account that
+created them. Report contents are also sent to the model provider configured by the operator;
+review its data-handling terms before use. Use synthetic data for demos.
 
 ## Requirements
 
 - Node.js 20.9 or later and npm.
 - Python 3.10 or later.
-- An API key for an OpenAI-compatible provider. The default configuration uses xAI.
+- A Groq API key. The default configuration uses Groq's OpenAI-compatible API.
 
 ## Run locally (Windows PowerShell)
 
@@ -28,8 +29,9 @@ Set-Location .\backend
 py -m venv .venv
 .\.venv\Scripts\Activate.ps1
 py -m pip install -r requirements.txt
-Copy-Item .env.example .env
-# Add XAI_API_KEY to backend\.env
+# `backend/.env` is ignored by Git. Create it from the example if it is missing:
+# Copy-Item .env.example .env
+# Add your key after GROQ_API_KEY= in that file.
 py -m uvicorn app.main:app --reload --port 8000
 ```
 
@@ -45,11 +47,14 @@ npm run dev
 Open `http://localhost:3000`. The FastAPI health endpoint is `http://localhost:8000/api/health`.
 Set `NEXT_PUBLIC_API_URL` in `frontend/.env.local` when the API is hosted elsewhere.
 
+The database is created automatically when the API starts. Set `DATABASE_PATH` in `backend/.env`
+to choose a different SQLite location.
+
 ## Model configuration
 
-Copy `backend/.env.example` to `backend/.env`. Configure `XAI_API_KEY` and `XAI_MODEL`.
-The server calls an OpenAI-compatible `/chat/completions` endpoint; `XAI_BASE_URL` can be
-changed for a compatible provider. An optional fallback is enabled by setting all of
+Open `backend/.env` and set `GROQ_API_KEY` to your key. The default model is
+`openai/gpt-oss-20b`; you can change it with `GROQ_MODEL`. The server calls Groq's
+OpenAI-compatible `/chat/completions` endpoint. An optional fallback is enabled by setting all of
 `FALLBACK_API_KEY`, `FALLBACK_BASE_URL`, and `FALLBACK_MODEL`. Secrets remain on the server.
 
 Each agent response is validated against Pydantic contracts. A schema-invalid or failed
@@ -96,6 +101,8 @@ npm run build
 - Urgency is a cautious prompt to contact a professional, not a clinical classification.
 - Nutrition suggestions are suppressed for urgent/severe findings, children, and when pregnancy
   is mentioned.
-- No report content is intentionally written to application logs or durable storage. The
-  configured external model provider receives the report for analysis.
+- A completed report explanation is stored in the local SQLite database for the signed-in user.
+  Use a managed database, HTTPS, secret rotation, backups, and a formal retention/deletion policy
+  before using real health information in production. The configured external model provider also
+  receives the report for analysis.
 - The safety review is not a guarantee of accuracy. A clinician should review results.

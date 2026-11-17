@@ -1,25 +1,44 @@
 import base64
 import os
 from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from io import BytesIO
+from pathlib import Path
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pypdf import PdfReader
 from pypdf.errors import PdfReadError
 
+from .database import (
+    authenticate_user,
+    create_session,
+    create_user,
+    delete_session,
+    init_database,
+    list_reports,
+    load_report,
+    require_user,
+    save_report,
+)
 from .pipeline import run_analysis
-from .schemas import PatientMetadata
+from .schemas import LoginInput, PatientMetadata, RegisterInput, StreamEvent
 
-load_dotenv()
+load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 ALLOWED_EXTENSIONS = {".pdf", ".png", ".jpg", ".jpeg"}
 IMAGE_MIME_TYPES = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg"}
 
-app = FastAPI(title="LabLens API", version="1.0.0")
+@asynccontextmanager
+async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+    init_database()
+    yield
+
+
+app = FastAPI(title="LabLens API", version="1.0.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -53,14 +72,52 @@ async def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
+@app.post("/api/auth/register")
+async def register(payload: RegisterInput) -> dict[str, object]:
+    user = create_user(payload.name, payload.email, payload.password)
+    return {"token": create_session(user["id"]), "user": user}
+
+
+@app.post("/api/auth/login")
+async def login(payload: LoginInput) -> dict[str, object]:
+    user = authenticate_user(payload.email, payload.password)
+    return {"token": create_session(user["id"]), "user": user}
+
+
+@app.post("/api/auth/logout")
+async def logout(request: Request, user: dict[str, object] = Depends(require_user)) -> dict[str, bool]:
+    del user
+    _, _, token = request.headers.get("Authorization", "").partition(" ")
+    delete_session(token.strip())
+    return {"ok": True}
+
+
+@app.get("/api/auth/me")
+async def me(user: dict[str, object] = Depends(require_user)) -> dict[str, object]:
+    return {"user": user}
+
+
+@app.get("/api/reports")
+async def reports(user: dict[str, object] = Depends(require_user)) -> dict[str, object]:
+    return {"reports": list_reports(int(user["id"]))}
+
+
+@app.get("/api/reports/{report_id}")
+async def report(report_id: str, user: dict[str, object] = Depends(require_user)) -> dict[str, object]:
+    return load_report(int(user["id"]), report_id)
+
+
 @app.post("/api/analyze")
 async def analyze(
+    request: Request,
     text: str = Form(default=""),
     file: UploadFile | None = File(default=None),
     name: str | None = Form(default=None),
     age: int | None = Form(default=None, ge=0, le=130),
     gender: str | None = Form(default=None),
+    user: dict[str, object] = Depends(require_user),
 ) -> StreamingResponse:
+    del request
     report_text = text.strip()
     image_data_url = None
     if file is not None and file.filename:
@@ -93,6 +150,10 @@ async def analyze(
 
     async def stream() -> AsyncIterator[str]:
         async for message in run_analysis(report_text, image_data_url, patient):
+            data = message.removeprefix("data: ").strip()
+            event = StreamEvent.model_validate_json(data)
+            if event.event == "final" and event.result is not None:
+                save_report(int(user["id"]), event.result)
             yield message
 
     return StreamingResponse(

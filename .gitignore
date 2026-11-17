@@ -18,6 +18,7 @@ backend/__pycache__/
 backend/**/__pycache__/
 backend/.pytest_cache/
 backend/.ruff_cache/
+backend/lablens.db
 *.py[cod]
 
 # Editors and OS

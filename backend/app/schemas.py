@@ -7,6 +7,17 @@ class StrictModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+class RegisterInput(StrictModel):
+    name: str = Field(min_length=2, max_length=80)
+    email: str = Field(min_length=5, max_length=254)
+    password: str = Field(min_length=8, max_length=128)
+
+
+class LoginInput(StrictModel):
+    email: str = Field(min_length=5, max_length=254)
+    password: str = Field(min_length=8, max_length=128)
+
+
 class PatientMetadata(StrictModel):
     name: str | None = None
     age: int | None = Field(default=None, ge=0, le=130)
