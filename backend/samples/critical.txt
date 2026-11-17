@@ -1,0 +1,3 @@
+SYNTHETIC DEMO REPORT — NOT A REAL PERSON
+Potassium: 7.2 mmol/L (reference range 3.5–5.1 mmol/L)
+This intentionally synthetic result is included only to exercise the educational urgent-warning interface.
