@@ -1,0 +1,47 @@
+export const samples = [
+  {
+    id: "sugar",
+    label: "Sugar-only",
+    description: "A single result with a printed range",
+    text: `SYNTHETIC DEMO REPORT — NOT A REAL PERSON
+Glucose, fasting: 142 mg/dL (reference range 70–99 mg/dL)
+Patient age: 42`,
+  },
+  {
+    id: "full",
+    label: "Full panel",
+    description: "CBC, cholesterol, glucose, liver and kidney results",
+    text: `SYNTHETIC DEMO REPORT — NOT A REAL PERSON
+Complete blood count
+Hemoglobin: 13.8 g/dL (reference range 12.0–16.0 g/dL)
+White blood cells: 7.2 x10^9/L (reference range 4.0–11.0 x10^9/L)
+Platelets: 250 x10^9/L (reference range 150–400 x10^9/L)
+Lipid panel
+Total cholesterol: 230 mg/dL (reference range <200 mg/dL)
+HDL cholesterol: 52 mg/dL (reference range >40 mg/dL)
+LDL cholesterol: 148 mg/dL (reference range <100 mg/dL)
+Glucose, fasting: 99 mg/dL (reference range 70–99 mg/dL)
+HbA1c: 5.6% (reference range <5.7%)
+Liver
+ALT: 24 U/L (reference range 7–56 U/L)
+Kidney
+Creatinine: 0.9 mg/dL (reference range 0.7–1.3 mg/dL)`,
+  },
+  {
+    id: "normal",
+    label: "All normal",
+    description: "Values shown within the report's ranges",
+    text: `SYNTHETIC DEMO REPORT — NOT A REAL PERSON
+Hemoglobin: 14.0 g/dL (reference range 12.0–16.0 g/dL)
+Glucose, fasting: 88 mg/dL (reference range 70–99 mg/dL)
+Total cholesterol: 175 mg/dL (reference range <200 mg/dL)`,
+  },
+  {
+    id: "critical",
+    label: "Urgent example",
+    description: "Synthetic only; demonstrates the warning state",
+    text: `SYNTHETIC DEMO REPORT — NOT A REAL PERSON
+Potassium: 7.2 mmol/L (reference range 3.5–5.1 mmol/L)
+This intentionally synthetic result is included only to exercise the educational urgent-warning interface.`,
+  },
+] as const;
